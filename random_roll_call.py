@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import os
 import sys
 import random
@@ -7,14 +7,15 @@ from tkinter import ttk
 import threading
 import time
 import queue
-import webbrowser  # 用于调用外部浏览器
+import webbrowser
 
 class RandomRollCallApp:
     def __init__(self, root):
         self.root = root
         self.root.title("随机点名系统")
-        self.root.geometry("600x580")
-        self.root.minsize(600, 580)
+        # 稍微增加宽度以容纳更多选项
+        self.root.geometry("700x620")
+        self.root.minsize(700, 620)
         self.root.configure(bg='#1a1a2e')
         
         # 语音功能初始化
@@ -22,6 +23,9 @@ class RandomRollCallApp:
         self.voice_queue = queue.Queue()
         self.voice_available = False
         self.check_voice_available()
+        
+        # 随机时长选择（默认3秒）
+        self.roll_duration = tk.StringVar(value="3")
         
         # 设置窗口居中
         self.center_window()
@@ -75,7 +79,7 @@ class RandomRollCallApp:
         self.voice_thread.start()
     
     def voice_worker(self):
-        """语音工作线程 - 每次播报都重新初始化引擎"""
+        """语音工作线程"""
         import pyttsx3
         
         while True:
@@ -122,23 +126,17 @@ class RandomRollCallApp:
                 pass
     
     def open_website(self, event=None):
-        """
-        点击kuxin时在系统默认浏览器中打开网站
-        webbrowser.open() 会自动调用外部浏览器（Chrome/Edge/Firefox等）
-        """
+        """点击kuxin时打开网站"""
         try:
-            # new=2 表示在新标签页打开（如果浏览器已运行）
-            # autoraise=True 表示将浏览器窗口置顶
             webbrowser.open("https://081252.xyz/", new=2, autoraise=True)
-            print("正在打开网站: https://081252.xyz/")
         except Exception as e:
             print(f"无法打开网站: {e}")
     
     def center_window(self):
         """窗口居中显示"""
         self.root.update_idletasks()
-        width = 600
-        height = 580
+        width = 700
+        height = 620
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
@@ -200,7 +198,7 @@ class RandomRollCallApp:
         
         # 按钮区域
         button_frame = tk.Frame(main_frame, bg='#1a1a2e')
-        button_frame.pack(pady=15)
+        button_frame.pack(pady=10)
         
         # 开始点名按钮
         self.roll_button = tk.Button(
@@ -218,6 +216,44 @@ class RandomRollCallApp:
             command=self.toggle_roll
         )
         self.roll_button.pack()
+        
+        # 时长选择区域（新增"秒出"选项）
+        duration_frame = tk.Frame(main_frame, bg='#1a1a2e')
+        duration_frame.pack(pady=10, fill='x')
+        
+        duration_label = tk.Label(
+            duration_frame,
+            text="随机时长：",
+            font=('Microsoft YaHei', 11),
+            bg='#1a1a2e',
+            fg='#aaa'
+        )
+        duration_label.pack(side='left', padx=(0, 10))
+        
+        # 单选按钮组 - 新增"秒出"选项
+        duration_options = [
+            ("⚡秒出", "instant"),
+            ("0.5秒", "0.5"),
+            ("1秒", "1"),
+            ("3秒", "3"),
+            ("5秒", "5")
+        ]
+        
+        for text, value in duration_options:
+            rb = tk.Radiobutton(
+                duration_frame,
+                text=text,
+                variable=self.roll_duration,
+                value=value,
+                font=('Microsoft YaHei', 10),
+                bg='#1a1a2e',
+                fg='#ccc',
+                selectcolor='#e94560',
+                activebackground='#1a1a2e',
+                activeforeground='#fff',
+                cursor='hand2'
+            )
+            rb.pack(side='left', padx=(0, 10))
         
         # 语音控制区域
         voice_frame = tk.Frame(main_frame, bg='#1a1a2e')
@@ -339,9 +375,7 @@ class RandomRollCallApp:
             cursor='hand2'
         )
         self.kuxin_label.pack(side='left')
-        # 绑定点击事件 - 点击后调用 open_website 打开外部浏览器
         self.kuxin_label.bind("<Button-1>", self.open_website)
-        # 悬停效果
         self.kuxin_label.bind("<Enter>", lambda e: self.kuxin_label.config(fg='#66b3ff'))
         self.kuxin_label.bind("<Leave>", lambda e: self.kuxin_label.config(fg='#4da6ff'))
         
@@ -411,34 +445,59 @@ class RandomRollCallApp:
         self.start_roll()
     
     def start_roll(self):
-        """开始随机点名动画"""
-        self.is_rolling = True
-        self.roll_button.config(
-            text="点名中...",
-            bg='#666',
-            state='disabled'
-        )
-        self.name_label.config(fg='#f39c12')
+        """开始随机点名"""
+        duration_str = self.roll_duration.get()
         
-        self.animation_thread = threading.Thread(target=self.animation_loop)
-        self.animation_thread.daemon = True
-        self.animation_thread.start()
+        # 判断是否秒出模式
+        if duration_str == "instant":
+            # 秒出模式：直接显示结果，无动画
+            final_name = random.choice(self.names_list)
+            self.finish_roll(final_name)
+        else:
+            # 动画模式
+            self.is_rolling = True
+            self.roll_button.config(
+                text="点名中...",
+                bg='#666',
+                state='disabled'
+            )
+            self.name_label.config(fg='#f39c12')
+            
+            self.animation_thread = threading.Thread(
+                target=self.animation_loop, 
+                args=(float(duration_str),)
+            )
+            self.animation_thread.daemon = True
+            self.animation_thread.start()
     
-    def animation_loop(self):
+    def animation_loop(self, duration):
         """动画循环"""
         start_time = time.time()
-        duration = 3
         
         while time.time() - start_time < duration:
             name = random.choice(self.names_list)
             self.root.after(0, lambda n=name: self.name_label.config(text=n))
             elapsed = time.time() - start_time
-            if elapsed < 1:
-                time.sleep(0.15)
-            elif elapsed < 2:
-                time.sleep(0.08)
-            else:
+            
+            # 根据时长调整切换速度
+            if duration == 0.5:
                 time.sleep(0.03)
+            elif duration == 1:
+                time.sleep(0.05)
+            elif duration == 3:
+                if elapsed < duration * 0.3:
+                    time.sleep(0.12)
+                elif elapsed < duration * 0.7:
+                    time.sleep(0.06)
+                else:
+                    time.sleep(0.03)
+            else:  # 5秒
+                if elapsed < duration * 0.3:
+                    time.sleep(0.15)
+                elif elapsed < duration * 0.7:
+                    time.sleep(0.08)
+                else:
+                    time.sleep(0.04)
         
         final_name = random.choice(self.names_list)
         self.root.after(0, lambda: self.finish_roll(final_name))
